@@ -1,11 +1,5 @@
-const FAST_BYTES = [
-  0x55, 0xab, 0x4d, 0x41, 0x58, 0x32, 0x53, 0x63, 0x6f, 0x6f, 0x74, 0x65, 0x72,
-  0x5f, 0x31,
-];
-const NORMAL_BYTES = [
-  0x55, 0xab, 0x4d, 0x41, 0x58, 0x32, 0x53, 0x63, 0x6f, 0x6f, 0x74, 0x65, 0x72,
-  0x5f, 0x30,
-];
+import { ScooterModel, ScooterModifier } from "./scooter/modifier";
+
 const SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const CHARACTERISTIC = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
@@ -15,11 +9,9 @@ function withTimeout<T>(timeout = 5000, func: Promise<T>): Promise<T> {
     new Promise((_, rej) => setTimeout(() => rej("Timeout occurred"), timeout)),
   ]) as Promise<T>;
 }
-export type SCOOTER_SPEED = "fast" | "normal";
 
 export type ScooterState = {
-  scooter: "CONNECTED" | "DISCONNECTED";
-  server: "CONNECTED" | "DISCONNECTED";
+  scooterConnection: "CONNECTED" | "DISCONNECTED";
   service: "CONNECTED" | "DISCONNECTED";
   characteristicData: "CONNECTED" | "DISCONNECTED";
 };
@@ -33,7 +25,6 @@ export class ScooterConnection {
   private onChange: (((state: ScooterState) => void) | null)[] = [];
 
   // Boring setter logic
-
   private set device(val: BluetoothDevice | null) {
     this._device = val;
     this.notifyChange();
@@ -70,6 +61,7 @@ export class ScooterConnection {
     return this._characteristic;
   }
 
+  // TODO: If we can fetch current state of characteristic.
   private set currentValueState(val: DataView | null) {
     this._currentValueState = val;
     this.notifyChange();
@@ -80,7 +72,6 @@ export class ScooterConnection {
   }
 
   // Connection Details
-
   public async Connect(): Promise<Error | null> {
     try {
       console.log("Searching for device...");
@@ -123,13 +114,7 @@ export class ScooterConnection {
         return new Error("Characteristic is null");
       }
 
-      //   this.characteristic.addEventListener(
-      //     "characteristicvaluechanged",
-      //     console.log
-      //   );
-
       console.log("Fetching current data...");
-      //   this.currentValueState = await this.characteristic.readValue();
       this.characteristic.startNotifications().then(console.log);
     } catch (error: unknown) {
       console.log(error);
@@ -139,38 +124,8 @@ export class ScooterConnection {
     return null;
   }
 
-  async UpdateScooterState(speed: SCOOTER_SPEED): Promise<Error | null> {
-    if (!this.device) {
-      return new Error("Device is null, please connect first");
-    }
-    if (!this.device.gatt?.connected) {
-      const server = await this.device.gatt?.connect();
-      if (!server) {
-        return new Error("failed to connect to server");
-      }
-      this.server = server;
-    }
-
-    const service = await this.server?.getPrimaryService(SERVICE);
-    if (!service) {
-      return new Error("Service is null");
-    }
-
-    this.service = service;
-    const characteristic = await this.service.getCharacteristic(CHARACTERISTIC);
-    if (!characteristic) {
-      return new Error("Characteristic failed to fetch");
-    }
-    this.characteristic = characteristic;
-
-    const bytes = speed === "fast" ? FAST_BYTES : NORMAL_BYTES;
-    console.log("Writing bytes: ", speed);
-    await this.characteristic.writeValueWithResponse(new Uint8Array(bytes));
-    return null;
-  }
-
   // Disconnect
-  async Disconnect() {
+  async Disconnect(): Promise<void> {
     if (!this.device) {
       return;
     }
@@ -188,20 +143,18 @@ export class ScooterConnection {
 
   getStatus(): ScooterState {
     return {
-      scooter: this.device ? "CONNECTED" : "DISCONNECTED",
-      server: this.server ? "CONNECTED" : "DISCONNECTED",
+      scooterConnection: this.server ? "CONNECTED" : "DISCONNECTED",
       service: this.service ? "CONNECTED" : "DISCONNECTED",
       characteristicData: this.characteristic ? "CONNECTED" : "DISCONNECTED",
     };
   }
 
   // Event Listener Logic
-
-  addStateListener(callback: (state: ScooterState) => void) {
+  addStateListener(callback: (state: ScooterState) => void): void {
     this.onChange.push(callback);
   }
 
-  removeStateListener(callback: (state: ScooterState) => void) {
+  removeStateListener(callback: (state: ScooterState) => void): void {
     for (let i = 0; i < this.onChange.length; i++) {
       if (this.onChange[i] === callback) {
         this.onChange[i] = null;
@@ -209,12 +162,20 @@ export class ScooterConnection {
     }
   }
 
-  private notifyChange() {
+  private notifyChange(): void {
     const state = this.getStatus();
     this.onChange.forEach((func) => {
       if (func) {
         func(state);
       }
     });
+  }
+
+  getScooterModifier(model: ScooterModel): Error | ScooterModifier {
+    if (!this.characteristic || !this.device?.gatt?.connected) {
+      return new Error("Scooter not connected");
+    }
+
+    return new ScooterModifier(model, this.characteristic);
   }
 }

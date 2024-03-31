@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { Button, Text } from "./components";
+import React, { useEffect, useState } from "react";
+import { Button, ScooterOption, Text } from "./components";
 import { ScooterConnection, ScooterState } from "./connection";
+import { ScooterModifier, ScooterModel } from "./scooter/modifier";
 
 const ConnectionStatus = ({
   device,
@@ -21,21 +22,28 @@ const ConnectionStatus = ({
   );
 };
 
-const Disclaimer = ({ children }) => {
+const Disclaimer = ({ children }: { children: React.ReactNode }) => {
   const [page, setPage] = useState(0);
 
   if (page === 0) {
     return (
       <div>
-        <Text>
-          Some regions, states, areas, etc. have regulations in place. While
-          using unlocked speed limits may be legal on private property, you are
-          responsible for knowing the laws of your area.
-        </Text>
-        <Text>
-          By continuing, you acknowledge this and accept all responsibility for
-          usage of this website.
-        </Text>
+        <div style={{ flex: 1 }}>
+          <Text>
+            This tool might increase the maximum speed of the following devices:
+          </Text>
+          <Text>Segway Ninebot Max G2 (Tested)</Text>
+          <Text>Segway Ninebot F2, F2 Plus, or F2 Pro (Untested)</Text>
+          <Text>
+            Some regions, states, areas, etc. have regulations in place. While
+            faster speeds might be legal on private property, you are
+            responsible for knowing the laws of your area.
+          </Text>
+          <Text>
+            By continuing, you acknowledge this and accept all responsibility
+            for usage of this website.
+          </Text>
+        </div>
         <Button onClick={() => setPage(page + 1)}>Continue</Button>
       </div>
     );
@@ -43,17 +51,24 @@ const Disclaimer = ({ children }) => {
   if (page === 1) {
     return (
       <div>
-        <Text>Have you updated your firmware to V1.3.1 or later?</Text>
-        <Text>
-          Due to browser limitations, reading what your scooter is set to is
-          broken :( Updating the setting seemed to work using an Android,
-          OnePlus 10 Pro
-        </Text>
-        <Text>
-          Note: While this was tested on a Segway Ninebot Max G2 on V1.5.3,
-          results are not guarenteed. Only **you** are responsible for use of
-          this website.
-        </Text>
+        <div style={{ flex: 1 }}>
+          <Text>Have you updated your firmware to V1.3.1 or later?</Text>
+          <Text>
+            Due to browser limitations, reading what your scooter is set to is
+            broken 😔 Updating the maximum speed worked for a Segway Ninebot Max
+            G2 when using a OnePlus 10 Pro (Android).
+          </Text>
+          <Text>
+            Note: While this was tested on a Segway Ninebot Max G2 on V1.5.3,
+            results are not guarenteed. Only **you** are responsible for use of
+            this website.
+          </Text>
+          <Text>
+            After changing the speed setting, you may need to drag the slider in
+            "Settings" &gt; "Custom settings of S mode" for this change to take
+            effect
+          </Text>
+        </div>
         <Button onClick={() => setPage(page + 1)}>Continue</Button>
       </div>
     );
@@ -62,11 +77,40 @@ const Disclaimer = ({ children }) => {
   return children;
 };
 
-const App = () => {
+const ScooterConnectionScreen = ({
+  connection,
+  children,
+  state,
+}: {
+  connection: ScooterConnection;
+  children: React.ReactNode;
+  state: ScooterState;
+}) => {
   const [error, setError] = useState<string>("");
-  const scooter = useRef<ScooterConnection>(new ScooterConnection());
-  const [state, setState] = useState<Partial<ScooterState>>({});
-  const connected = state.server === "CONNECTED";
+  const connected = state.scooterConnection === "CONNECTED";
+
+  return (
+    <div>
+      {!connected && (
+        <Button
+          onClick={() =>
+            connection.Connect().then((err) => setError(err?.message || ""))
+          }
+        >
+          Search (name will be serial number)
+        </Button>
+      )}
+      {connected && (
+        <Button onClick={() => connection.Disconnect()}>Disconnect</Button>
+      )}
+      <ConnectionStatus device={state} />
+      {error && <div>{error}</div>}
+      {connected && children}
+    </div>
+  );
+};
+
+const ScooterModifierScreen = ({ scooter }: { scooter: ScooterModifier }) => {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -76,54 +120,130 @@ const App = () => {
     }
   }, [message]);
 
+  return (
+    <div>
+      {message && <div>{message}</div>}
+      <Button
+        onClick={() =>
+          scooter
+            .UpdateScooterState("fast")
+            .then(() => setMessage("Updated speed to fast"))
+        }
+      >
+        Set Fast Speed
+      </Button>
+      <Button
+        onClick={() =>
+          scooter
+            .UpdateScooterState("normal")
+            .then(() => setMessage("Updated speed to normal"))
+        }
+      >
+        Set Normal Speed
+      </Button>
+    </div>
+  );
+};
+
+const ScooterModelSelector = ({
+  model,
+  setModel,
+}: {
+  model?: ScooterModel;
+  setModel: React.Dispatch<ScooterModel | undefined>;
+}) => {
+  const [changeModel, setChangeModel] = useState(false);
+  const options: { [key: string]: ScooterModel } = {
+    "Ninebot Max G2": "MAX G2",
+    "Ninebot F2, F2 Plus, or F2 Pro": "F2/F2PLUS/F2PRO",
+  };
+
+  if (model && !changeModel) {
+    return (
+      <div style={{ flex: "1" }}>
+        <Text>
+          {model}{" "}
+          <button onClick={() => setChangeModel(true)}>Change Model</button>
+        </Text>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Text>Select your scooter</Text>
+      {Object.keys(options).map((name) => (
+        <ScooterOption
+          selected={model === options[name]}
+          onClick={() => {
+            setModel(options[name]);
+            setChangeModel(false);
+          }}
+        >
+          {name}
+        </ScooterOption>
+      ))}
+    </div>
+  );
+};
+
+const App = () => {
+  const [scooter, setScooter] = useState<ScooterModifier>();
+  const [model, setModel] = useState<ScooterModel>();
+  const [error, setError] = useState<string>("");
+  const [connection] = useState<ScooterConnection>(new ScooterConnection());
+  const [scooterState, setScooterState] = useState<ScooterState>({
+    characteristicData: "DISCONNECTED",
+    scooterConnection: "DISCONNECTED",
+    service: "DISCONNECTED",
+  });
+
   useEffect(() => {
-    const changeState = (state: ScooterState) => setState(state);
-    const currentRef = scooter.current;
-    currentRef.addStateListener(changeState);
-    return () => currentRef.removeStateListener(changeState);
-  }, []);
+    if (scooterState.service === "CONNECTED") return;
+
+    setError("");
+    setModel(undefined);
+    setScooter(undefined);
+  }, [scooterState.service]);
+
+  useEffect(() => {
+    if (!model) {
+      setError("Scooter model not selected");
+      return;
+    }
+
+    if (scooterState.service === "DISCONNECTED") {
+      setError("Scooter is disconnected");
+      return;
+    }
+
+    const modifier = connection.getScooterModifier(model);
+    if (modifier instanceof Error) {
+      console.error(modifier);
+      setError(modifier.message);
+      return;
+    }
+
+    setError("");
+    setScooter(modifier);
+  }, [model, connection, scooterState.service]);
+
+  useEffect(() => {
+    const changeState = (state: ScooterState) => setScooterState(state);
+    connection.addStateListener(changeState);
+    return () => {
+      connection.removeStateListener(changeState);
+      connection.Disconnect();
+    };
+  }, [connection]);
 
   return (
     <Disclaimer>
-      {!connected && (
-        <Button
-          onClick={() =>
-            scooter.current
-              .Connect()
-              .then((err) => setError(err?.message || ""))
-          }
-        >
-          Search (name will be serial number)
-        </Button>
-      )}
-      {connected && (
-        <Button onClick={() => scooter.current.Disconnect()}>Disconnect</Button>
-      )}
-      <ConnectionStatus device={state} />
-      {error && <div>{error}</div>}
-      {connected && (
-        <Button
-          onClick={() =>
-            scooter.current
-              .UpdateScooterState("fast")
-              .then(() => setMessage("Updated speed to fast"))
-          }
-        >
-          Set Fast Speed
-        </Button>
-      )}
-      {connected && (
-        <Button
-          onClick={() =>
-            scooter.current
-              .UpdateScooterState("normal")
-              .then(() => setMessage("Updated speed to normal"))
-          }
-        >
-          Set Normal Speed
-        </Button>
-      )}
-      {message && <div>{message}</div>}
+      <ScooterConnectionScreen state={scooterState} connection={connection}>
+        <ScooterModelSelector model={model} setModel={setModel} />
+        {error && <Text>{error}</Text>}
+        {scooter && <ScooterModifierScreen scooter={scooter} />}
+      </ScooterConnectionScreen>
     </Disclaimer>
   );
 };
