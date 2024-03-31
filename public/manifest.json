@@ -1,0 +1,16 @@
+{
+    "name": "Scooter Speed Util",
+    "short_name": "🛴💨",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#fff",
+    "description": "Increase or decrease the default max speed on a few scooters",
+    "icons": [
+      {
+        "src": "scooter-icon.svg",
+        "sizes": "48x48 72x72 96x96 128x128 256x256 512x512",
+        "type": "image/svg+xml",
+        "purpose": "any"
+      }
+    ]
+}
