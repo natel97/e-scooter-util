@@ -55,13 +55,12 @@ const Disclaimer = ({ children }: { children: React.ReactNode }) => {
           <Text>Have you updated your firmware to V1.3.1 or later?</Text>
           <Text>
             Due to browser limitations, reading what your scooter is set to is
-            broken 😔 Updating the maximum speed worked for a Segway Ninebot Max
-            G2 when using a OnePlus 10 Pro (Android).
+            broken 😔
           </Text>
           <Text>
-            Note: While this was tested on a Segway Ninebot Max G2 on V1.5.3,
-            results are not guarenteed. Only **you** are responsible for use of
-            this website.
+            The testing of this utility was limited to a single case (OnePlus
+            Android phone, Max G2 firmware V1.5.3). So results may vary. **You**
+            are responsible for your use of this website.
           </Text>
           <Text>
             After changing the speed setting, you may need to drag the slider in
