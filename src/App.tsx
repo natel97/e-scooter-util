@@ -52,7 +52,11 @@ const Disclaimer = ({ children }: { children: React.ReactNode }) => {
     return (
       <div>
         <div style={{ flex: 1 }}>
-          <Text>Have you updated your firmware to V1.3.1 or later?</Text>
+          <Text>
+            Have you updated your scooter firmware to V1.3.1 or later? According
+            to the document that referenced this, that is required. Please do
+            that!
+          </Text>
           <Text>
             Due to browser limitations, reading what your scooter is set to is
             broken 😔
