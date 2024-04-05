@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Button, ScooterOption, Text } from "./components";
+import React, { useEffect, useRef, useState } from "react";
+import { Button, Loading, ScooterOption, Text } from "./components";
 import { ScooterConnection, ScooterState } from "./connection";
 import { ScooterModifier, ScooterModel } from "./scooter/modifier";
 
@@ -22,59 +22,76 @@ const ConnectionStatus = ({
   );
 };
 
+const DisclaimerText1 = ({ onClick }) => (
+  <div>
+    <div style={{ flex: 1 }}>
+      <Text>
+        This tool might increase the maximum speed of the following devices:
+      </Text>
+      <Text>Segway Ninebot Max G2 (Tested)</Text>
+      <Text>Segway Ninebot F2, F2 Plus, or F2 Pro (Untested)</Text>
+      <Text>
+        Some regions, states, areas, etc. have regulations in place. While
+        faster speeds might be legal on private property, you are responsible
+        for knowing the laws of your area.
+      </Text>
+      <Text>
+        By continuing, you acknowledge this and accept all responsibility for
+        usage of this website.
+      </Text>
+    </div>
+    <Button onClick={onClick}>Continue</Button>
+  </div>
+);
+
+const DisclaimerText2 = ({ onClick }) => (
+  <div>
+    <div style={{ flex: 1 }}>
+      <Text>
+        Have you updated your scooter firmware to V1.3.1 or later? According to
+        the document that referenced this, that is required. Please do that!
+      </Text>
+      <Text>
+        Due to browser limitations, reading what your scooter is set to is
+        broken 😔
+      </Text>
+      <Text>
+        The testing of this utility was limited to a single case (OnePlus
+        Android phone, Max G2 firmware V1.5.3). So results may vary. **You** are
+        responsible for your use of this website.
+      </Text>
+      <Text>
+        After changing the speed setting, you may need to drag the slider in
+        "Settings" &gt; "Custom settings of S mode" for this change to take
+        effect
+      </Text>
+    </div>
+    <Button onClick={onClick}>Continue</Button>
+  </div>
+);
+
+const IncompatibleScreen = () => (
+  <div style={{ flex: 1 }}>
+    <Text>
+      Your device, browser, and/or operating system is not compatible with this
+      website due to{" "}
+      <a href="https://caniuse.com/web-bluetooth">bluetooth requirements</a>.
+      Please try again in a different browser or device.
+    </Text>
+  </div>
+);
+
 const Disclaimer = ({ children }: { children: React.ReactNode }) => {
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(navigator.bluetooth ? 1 : 0);
 
   if (page === 0) {
-    return (
-      <div>
-        <div style={{ flex: 1 }}>
-          <Text>
-            This tool might increase the maximum speed of the following devices:
-          </Text>
-          <Text>Segway Ninebot Max G2 (Tested)</Text>
-          <Text>Segway Ninebot F2, F2 Plus, or F2 Pro (Untested)</Text>
-          <Text>
-            Some regions, states, areas, etc. have regulations in place. While
-            faster speeds might be legal on private property, you are
-            responsible for knowing the laws of your area.
-          </Text>
-          <Text>
-            By continuing, you acknowledge this and accept all responsibility
-            for usage of this website.
-          </Text>
-        </div>
-        <Button onClick={() => setPage(page + 1)}>Continue</Button>
-      </div>
-    );
+    return <IncompatibleScreen />;
   }
   if (page === 1) {
-    return (
-      <div>
-        <div style={{ flex: 1 }}>
-          <Text>
-            Have you updated your scooter firmware to V1.3.1 or later? According
-            to the document that referenced this, that is required. Please do
-            that!
-          </Text>
-          <Text>
-            Due to browser limitations, reading what your scooter is set to is
-            broken 😔
-          </Text>
-          <Text>
-            The testing of this utility was limited to a single case (OnePlus
-            Android phone, Max G2 firmware V1.5.3). So results may vary. **You**
-            are responsible for your use of this website.
-          </Text>
-          <Text>
-            After changing the speed setting, you may need to drag the slider in
-            "Settings" &gt; "Custom settings of S mode" for this change to take
-            effect
-          </Text>
-        </div>
-        <Button onClick={() => setPage(page + 1)}>Continue</Button>
-      </div>
-    );
+    return <DisclaimerText1 onClick={() => setPage((p) => p + 1)} />;
+  }
+  if (page === 2) {
+    return <DisclaimerText2 onClick={() => setPage((p) => p + 1)} />;
   }
 
   return children;
@@ -91,14 +108,46 @@ const ScooterConnectionScreen = ({
 }) => {
   const [error, setError] = useState<string>("");
   const connected = state.scooterConnection === "CONNECTED";
+  const ref = useRef<HTMLDialogElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+
+  useEffect(() => {
+    if (!navigator.bluetooth) {
+      setError(
+        "Bluetooth is not supported in this browser. Please try again in another browser or device."
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ref.current === null) {
+      return;
+    }
+
+    ref.current.showModal();
+  }, [error]);
 
   return (
     <div>
       {!connected && (
         <Button
-          onClick={() =>
-            connection.Connect().then((err) => setError(err?.message || ""))
-          }
+          onClick={() => {
+            setLoading(true);
+            connection
+              .Connect((str) => setLoadingMessage((msgs) => [...msgs, str]))
+              .then((err) => {
+                setError(err?.message || "");
+                if (err) {
+                  setLoadingMessage((msgs) => [
+                    ...msgs,
+                    "Error: " + err.message,
+                  ]);
+                }
+                setLoading(false);
+              });
+          }}
         >
           Search (name will be serial number)
         </Button>
@@ -107,8 +156,27 @@ const ScooterConnectionScreen = ({
         <Button onClick={() => connection.Disconnect()}>Disconnect</Button>
       )}
       <ConnectionStatus device={state} />
-      {error && <div>{error}</div>}
+      {error && (
+        <dialog ref={ref}>
+          <Text>{error}</Text>
+          <Button autoFocus onClick={() => ref.current?.close()}>
+            OK
+          </Button>
+        </dialog>
+      )}
       {connected && children}
+      {loading && <Loading />}
+      <button onClick={() => setShowLogs((cur) => !cur)}>
+        {showLogs ? "Hide" : "Show"} Connection Logs
+      </button>
+      {showLogs && (
+        <div>
+          <div>Logs</div>
+          {loadingMessage.map((msg) => (
+            <div>{msg}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

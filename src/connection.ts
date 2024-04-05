@@ -72,9 +72,16 @@ export class ScooterConnection {
   }
 
   // Connection Details
-  public async Connect(): Promise<Error | null> {
+  public async Connect(
+    updateStatus: (val: string) => void
+  ): Promise<Error | null> {
+    const updateAndLog = (connectionMessage: string) => {
+      console.log({ connectionMessage });
+      updateStatus(connectionMessage);
+    };
+
     try {
-      console.log("Searching for device...");
+      updateAndLog("Searching for device...");
       this.device = await navigator.bluetooth.requestDevice({
         filters: [{ services: [SERVICE] }],
       });
@@ -82,8 +89,8 @@ export class ScooterConnection {
         return new Error("GATT service unreachable");
       }
 
-      console.log("Connecting...");
-      this.server = await withTimeout(6000, this.device.gatt.connect());
+      updateAndLog("Attempting to connect to " + this.device.name);
+      this.server = await withTimeout(10_000, this.device.gatt.connect());
       if (!this.server) {
         return new Error("Failed to connect to server");
       }
@@ -92,9 +99,10 @@ export class ScooterConnection {
         this.characteristic = null;
         this.service = null;
         this.server = null;
+        updateAndLog("Service disconnected");
       });
 
-      console.log("Fetching needed service...");
+      updateAndLog("Fetching needed service...");
       this.service = await withTimeout(
         5000,
         this.server.getPrimaryService(SERVICE)
@@ -105,7 +113,7 @@ export class ScooterConnection {
 
       this.service.getCharacteristics().then(console.log);
 
-      console.log("Fetching Characteristic...");
+      updateAndLog("Fetching Scooter Characteristic Data...");
       this.characteristic = await withTimeout(
         4000,
         this.service.getCharacteristic(CHARACTERISTIC)
@@ -113,13 +121,11 @@ export class ScooterConnection {
       if (!this.characteristic) {
         return new Error("Characteristic is null");
       }
-
-      console.log("Fetching current data...");
-      this.characteristic.startNotifications().then(console.log);
     } catch (error: unknown) {
       console.log(error);
       return error as Error;
     }
+    updateAndLog("Connected! :D");
 
     return null;
   }
